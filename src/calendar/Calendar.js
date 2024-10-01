@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { DayPilotCalendar, DayPilot } from "@daypilot/daypilot-lite-react"; // Import DayPilot
 import "./Calendar.css";
-import { convertToDayDateTime, processFormDates, convertToCSV, downloadCSV, getDateForSelectedDay } from './days.js';
+import { convertToDayDateTime, processFormDates, convertToCSV, downloadCSV } from './days.js';
 
 const styles = {
   wrap: {

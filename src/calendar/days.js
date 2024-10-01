@@ -166,31 +166,31 @@ const timeSlotLookup = {
 
   
   // Function to trigger CSV file download
-//   export const downloadCSV = (csvContent, filename) => {
-//     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-//     const url = URL.createObjectURL(blob);
-//     const link = document.createElement('a');
-//     link.href = url;
-//     link.setAttribute('download', filename);
-//     document.body.appendChild(link);
-//     link.click();
-//     document.body.removeChild(link);
-//   };
-
-export const downloadCSV = (csvContent, filename) => {
-    // Encode CSV content as a URI component
-    const csvDataUri = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvContent);
-    
-    // Create an anchor element
+  export const downloadCSV = (csvContent, filename) => {
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.href = csvDataUri;
-    link.setAttribute('download', filename); // Set the filename for download
-    
-    // Append the anchor to the document, trigger the click, and remove the anchor
+    link.href = url;
+    link.setAttribute('download', filename);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-};
+  };
+
+// export const downloadCSV = (csvContent, filename) => {
+//     // Encode CSV content as a URI component
+//     const csvDataUri = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvContent);
+    
+//     // Create an anchor element
+//     const link = document.createElement('a');
+//     link.href = csvDataUri;
+//     link.setAttribute('download', filename); // Set the filename for download
+    
+//     // Append the anchor to the document, trigger the click, and remove the anchor
+//     document.body.appendChild(link);
+//     link.click();
+//     document.body.removeChild(link);
+// };
 
   // Testing 
 // export const downloadCSV = (csvContent, filename) => {

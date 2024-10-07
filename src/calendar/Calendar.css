@@ -11,3 +11,35 @@
     opacity: 0.8;
     /* width: 100%; */
 }
+
+h2 {
+    margin-top: 0;
+}
+
+.csv-btn{
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+}
+
+.csv-import-btn{
+    background-color: #2982ff;
+    border-radius: 5px;
+    color: white;
+    border: 1px solid ;
+    height: 30px;
+    width: 120px;
+    margin-bottom: 5px;
+    padding-bottom: 3px;
+}
+
+.csv-export-btn{
+    background-color: #1f4f9c;
+    border-radius: 5px;
+    color: white;
+    border: 1px solid ;
+    height: 30px;
+    width: 120px;
+    margin-bottom: 5px;
+    padding-bottom: 3px;
+}

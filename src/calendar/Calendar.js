@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { DayPilotCalendar, DayPilot } from "@daypilot/daypilot-lite-react"; // Import DayPilot
 import "./Calendar.css";
-import { convertToDayDateTime, processFormDates, convertToCSV, downloadCSV } from './days.js';
+import { convertToDayDateTime, toDateTime } from './days.js';
+import { convertToCSV, downloadCSV } from './handledata.js';
 
 const styles = {
   wrap: {
@@ -15,6 +16,8 @@ const styles = {
 const Calendar = () => {
   const [calendar, setCalendar] = useState(null);
   const [events, setEvents] = useState([]);
+  const [lecturer, setLecturer] = useState(""); // State to hold the lecturer name
+
 
   const startDate = "2024-10-07"; // Fixed start date for the week (Monday)
 
@@ -28,8 +31,8 @@ const Calendar = () => {
     cellDuration: 60,
     events: events,
     onTimeRangeSelected: async args => {
-      const { dayOfWeek, time: startTime } = convertToDayDateTime(args.start, 2);
-      const endTime = convertToDayDateTime(args.end, 1);
+      const { dayOfWeek, time: startTime } = convertToDayDateTime(args.start);
+      const {time: endTime} = convertToDayDateTime(args.end);
 
       // Check if the selected time range falls within 12:00 - 13:00
       if (startTime < 13 && endTime > 12) {
@@ -73,7 +76,7 @@ const Calendar = () => {
         return; // If form is cancelled, do nothing
       }
 
-      const {startDateTime, endDateTime} = processFormDates(form.result.Day, form.result.StartTime, form.result.EndTime)
+      const {startDateTime, endDateTime} = toDateTime(form.result.Day, form.result.StartTime, form.result.EndTime)
     
       // Clear the selection on the calendar
       calendar.clearSelection();
@@ -83,7 +86,7 @@ const Calendar = () => {
         start: new DayPilot.Date(startDateTime), // Set start date and time
         end: new DayPilot.Date(endDateTime),     // Set end date and time
         id: DayPilot.guid(),                 // Generate a unique ID for the event
-        text: form.result.ModuleName,         // Module name entered by the user
+        module: form.result.ModuleName,         // Module name entered by the user
         classroom: form.result.Classroom,     // Classroom entered by the user
         class: form.result.Class,
         classType: form.result.ClassType
@@ -142,7 +145,7 @@ const Calendar = () => {
 
       // Display classroom information visually in the event text
       args.data.html = `<div>
-        <strong>Module: ${args.data.text}</strong><br/>
+        <strong>Module: ${args.data.module}</strong><br/>
         <span style="font-size: 12px; color: #FFF;">Class: ${args.data.class || 'N/A'} <br/> Class Type: ${args.data.classType || 'N/A'} <br/> Classroom: ${args.data.classroom || 'N/A'}</span>
       </div>`;
     },
@@ -155,8 +158,8 @@ const Calendar = () => {
   };
 
   const editEvent = async (e) => {
-    const { dayOfWeek, time: startTime } = convertToDayDateTime(e.data.start, 2);
-    const endTime = convertToDayDateTime(e.data.end, 1);
+    const { dayOfWeek, time: startTime } = convertToDayDateTime(e.data.start);
+    const {time: endTime} = convertToDayDateTime(e.data.end);
 
     // Open modal form with dropdown for day selection and time inputs
     const form = await DayPilot.Modal.form([
@@ -188,7 +191,7 @@ const Calendar = () => {
         type: "time", 
       },
     ], {
-      ModuleName: e.data.text,
+      ModuleName: e.data.module,
       Class: e.data.class ,
       ClassType: e.data.classType ,
       Classroom: e.data.classroom ,
@@ -202,10 +205,10 @@ const Calendar = () => {
       return;
     }
 
-    const {startDateTime, endDateTime} = processFormDates(form.result.Day, form.result.StartTime, form.result.EndTime)
+    const {startDateTime, endDateTime} = toDateTime(form.result.Day, form.result.StartTime, form.result.EndTime)
   
     // Update event data
-    e.data.text = form.result.ModuleName;
+    e.data.module = form.result.ModuleName;
     e.data.classroom = form.result.Classroom;
     e.data.start = startDateTime;
     e.data.end = endDateTime;
@@ -231,134 +234,107 @@ const Calendar = () => {
     const reader = new FileReader();
     reader.onload = (e) => {
       const csvContent = e.target.result;
-      console.log("CSV Content:", csvContent); // Log the CSV content for debugging
   
-      // Split rows, remove any empty lines, and skip the first row (header)
-      const rows = csvContent.split("\n").filter(row => row.trim() !== "").slice(1); // Skip the first row
+      // Split rows, remove any empty lines
+      const rows = csvContent.split("\n").filter(row => row.trim() !== "");
+      
+      // Get the first row (headers)
+      const headers = rows[0].replace(/\r$/, "").split(",").map(col => col.trim().replace(/^"|"$/g, ""));
   
-      // Parse the rows into objects
-      const parsedRows = rows.map((row, index) => {
-        // Remove the trailing '\r' from each row and split it into columns
-        const columns = row.replace(/\r$/, "").split(",").map(col => col.trim());
+      // Parse the remaining rows into objects using the headers
+      const parsedRows = rows.slice(1).map((row, index) => {
+        const columns = row.replace(/\r$/, "").split(",").map(col => col.trim().replace(/^"|"$/g, "")); // Remove leading and trailing quotes
   
-        if (columns.length < 8) {
-          console.error(`Row ${index + 2} has missing columns`, columns);
+        if (columns.length !== headers.length) {
+          console.error(`Row ${index + 2} has a different number of columns`, columns);
           return null;
         }
   
-        const [module, classInfo, classType, timeSlot, room, timeslotDay, timeslotStart, timeslotEnd] = columns;
+        // Create an object where the keys are the headers and values are the corresponding columns
+        const rowObject = headers.reduce((obj, header, i) => {
+          obj[header] = columns[i];
+          return obj;
+        }, {});
   
-        return {
-          module,
-          classInfo,
-          classType,
-          timeSlot,
-          room,
-          timeslotDay,
-          timeslotStart,
-          timeslotEnd
-        };
+        return rowObject;
       }).filter(row => row !== null);
   
-      // Map over the parsed rows to prepare them for sorting by day and start time
+      // console.log("Parsed Rows:", parsedRows); // Debugging parsed rows
+  
+      // Process the rows for sorting or merging
       const rowsForSorting = parsedRows.map(event => {
-        const { module, classInfo, classType, room, timeslotDay, timeslotStart, timeslotEnd } = event;
-        return [
+        // Ensure the correct property names match those in the parsedRows
+        const { Working_Day: timeslotDay, start_time: timeslotStart, end_time: timeslotEnd, Module: module, Lecturer: lecturer, Class_Type: classType, Class: classInfo, Room: room } = event;
+        setLecturer(lecturer);
+
+        return {
           timeslotDay,          // Day of the week
           timeslotStart,        // Start time
           timeslotEnd,          // End time
           module,               // Module name
-          classInfo || 'N/A',   // Class, default to 'N/A' if missing
-          classType || 'N/A',   // Class type, default to 'N/A' if missing
-          room || 'N/A'         // Classroom, default to 'N/A' if missing
-        ];
+          lecturer,             // lecturer name
+          classInfo: classInfo || 'N/A',   // Class, default to 'N/A' if missing
+          classType: classType || 'N/A',   // Class type, default to 'N/A' if missing
+          room: room || 'N/A'              // Classroom, default to 'N/A' if missing
+        };
       });
   
       // Sort the rows by day of the week and then by start time
       rowsForSorting.sort((a, b) => {
-        const dayComparison = getDayValue(a[0]) - getDayValue(b[0]); // Compare by day of the week
+        const dayComparison = getDayValue(a.timeslotDay) - getDayValue(b.timeslotDay); // Compare by day of the week
         if (dayComparison !== 0) {
           return dayComparison; // If days are different, sort by day
         }
         // If days are the same, compare by start time
-        return a[1].localeCompare(b[1]); // Use localeCompare for time comparison
+        return a.timeslotStart.localeCompare(b.timeslotStart); // Use localeCompare for time comparison
       });
-    
+  
       // Helper function to check if two rows should be merged
       const shouldMerge = (row1, row2) => {
-        // Check if the same module, class, classType, room, and day
-        if (
+        return (
           row1.module === row2.module &&
           row1.classInfo === row2.classInfo &&
           row1.classType === row2.classType &&
           row1.room === row2.room &&
-          row1.timeslotDay === row2.timeslotDay
-        ) {
-          // Check if row2 starts exactly when row1 ends
-          return row1.timeslotEnd === row2.timeslotStart;
-        }
-        return false;
+          row1.timeslotDay === row2.timeslotDay &&
+          row1.timeslotEnd === row2.timeslotStart
+        );
       };
   
       // Merge consecutive rows into single events
       const mergedEvents = [];
       let currentEvent = null;
   
-      parsedRows.forEach((row, index) => {
+      rowsForSorting.forEach((row, index) => {
         if (!currentEvent) {
-          // Start a new event
-          currentEvent = {
-            module: row.module,
-            classInfo: row.classInfo,
-            classType: row.classType,
-            room: row.room,
-            timeslotDay: row.timeslotDay,
-            timeslotStart: row.timeslotStart,
-            timeslotEnd: row.timeslotEnd
-          };
+          currentEvent = { ...row };
         } else {
-          // Check if the current row should be merged with the current event
           if (shouldMerge(currentEvent, row)) {
-            // Extend the current event's end time
             currentEvent.timeslotEnd = row.timeslotEnd;
           } else {
-            // Save the current event and start a new one
             mergedEvents.push(currentEvent);
-            currentEvent = {
-              module: row.module,
-              classInfo: row.classInfo,
-              classType: row.classType,
-              room: row.room,
-              timeslotDay: row.timeslotDay,
-              timeslotStart: row.timeslotStart,
-              timeslotEnd: row.timeslotEnd
-            };
+            currentEvent = { ...row };
           }
         }
-  
-        // Push the last event when done iterating
-        if (index === parsedRows.length - 1) {
+        if (index === rowsForSorting.length - 1) {
           mergedEvents.push(currentEvent);
         }
       });
-  
-      // Convert the merged events to DayPilot events
+    
       const parsedEvents = mergedEvents.map(event => {
-        const { startDateTime, endDateTime } = processFormDates(event.timeslotDay, event.timeslotStart, event.timeslotEnd);
-  
+        const { startDateTime, endDateTime } = toDateTime(event.timeslotDay, event.timeslotStart, event.timeslotEnd);
         return {
           id: DayPilot.guid(),
           start: new DayPilot.Date(startDateTime),
           end: new DayPilot.Date(endDateTime),
-          text: event.module,
+          module: event.module,
           classroom: event.room,
           class: event.classInfo,
           classType: event.classType
         };
       });
   
-      setEvents(parsedEvents); // Update the events state
-      console.log("Parsed and Merged Events:", parsedEvents); // Log merged events for debugging
+      setEvents(parsedEvents);
   
       calendar.update(); // Force the calendar to update
     };
@@ -367,31 +343,37 @@ const Calendar = () => {
   };
   
   
-  
 
-  return (
-    <div>
-      <div style={styles.buttonWrap}>
+  return ( 
+    <div className="calendar-container">
+      {/* Display the lecturer's timetable heading */}
+      {lecturer && <h2>Timetable for {lecturer}</h2>} {/* Conditionally render the heading */}
+      <div>
+        <div style={styles.buttonWrap} className="csv-btn">
 
-        {/* Add the file input for CSV import */}
-        <input
-          type="file"
-          accept=".csv"
-          onChange={(e) => {
-            const file = e.target.files[0];
-            if (file) {
-              parseCSVFile(file);
+          {/* Add the file input for CSV import */}
+          <input
+            type="file"
+            accept=".csv"
+            onChange={(e) => {
+              const file = e.target.files[0];
+              if (file) {
+                parseCSVFile(file);
+              }
+            }}
+          />
+        <button className="csv-export-btn" onClick={() => {
+            if (events.length === 0) {
+              alert("No events to export.");
+              return; // Exit if there are no events
             }
-          }}
-        />
-
-      <button onClick={() => {
-          const csvContent = convertToCSV(events);  // Convert events to CSV format
-          downloadCSV(csvContent, 'schedule.csv');  // Trigger the download
-        }}>
-          Export to CSV
-        </button>
-        {/* <button>Import from CSV</button> */}
+            const csvContent = convertToCSV(events, lecturer);  // Convert events to CSV format
+            downloadCSV(csvContent, 'schedule.csv');  // Trigger the download
+          }}>
+            Export to CSV
+          </button>
+          {/* <button>Import from CSV</button> */}
+        </div>
       </div>
 
       <div style={styles.main}>
